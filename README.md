@@ -36,5 +36,6 @@ A room is open by default: everyone who joins can edit. An editor can turn on vi
 | `enable-view-only` | client → server | `roomID`, ack with the new `editorToken` |
 | `room-role` | server → client | `"editor"` or `"viewer"` for the joining socket |
 | `room-roles-change` | server → room | `{ [socketId]: "editor" \| "viewer" }` |
+| `broadcast-rejected` | server → client | `roomID` of a scene update the server dropped |
 
-After view-only is on, sockets that join without the editor token are viewers.
+After view-only is on, sockets that join without the editor token are viewers. The server drops their scene updates (`server-broadcast`) and answers with `broadcast-rejected`. Cursor and idle updates (`server-volatile-broadcast`) still go through, so editors can see where viewers are looking.
