@@ -3,6 +3,8 @@ import express from "express";
 import http from "http";
 import { Server as SocketIO } from "socket.io";
 
+import { assignRole, enableViewOnly, getRoles, removeSocket } from "./roles";
+
 type UserToFollow = {
   socketId: string;
   username: string;
@@ -52,22 +54,38 @@ try {
   io.on("connection", (socket) => {
     ioDebug("connection established!");
     io.to(`${socket.id}`).emit("init-room");
-    socket.on("join-room", async (roomID) => {
-      socketDebug(`${socket.id} has joined ${roomID}`);
-      await socket.join(roomID);
-      const sockets = await io.in(roomID).fetchSockets();
-      if (sockets.length <= 1) {
-        io.to(`${socket.id}`).emit("first-in-room");
-      } else {
-        socketDebug(`${socket.id} new-user emitted to room ${roomID}`);
-        socket.broadcast.to(roomID).emit("new-user", socket.id);
-      }
+    socket.on(
+      "join-room",
+      async (roomID: string, editorToken?: string | null) => {
+        socketDebug(`${socket.id} has joined ${roomID}`);
+        await socket.join(roomID);
+        const role = assignRole(roomID, socket.id, editorToken);
+        io.to(`${socket.id}`).emit("room-role", role);
+        const sockets = await io.in(roomID).fetchSockets();
+        if (sockets.length <= 1) {
+          io.to(`${socket.id}`).emit("first-in-room");
+        } else {
+          socketDebug(`${socket.id} new-user emitted to room ${roomID}`);
+          socket.broadcast.to(roomID).emit("new-user", socket.id);
+        }
 
-      io.in(roomID).emit(
-        "room-user-change",
-        sockets.map((socket) => socket.id),
-      );
-    });
+        io.in(roomID).emit(
+          "room-user-change",
+          sockets.map((socket) => socket.id),
+        );
+        io.in(roomID).emit("room-roles-change", getRoles(roomID));
+      },
+    );
+
+    socket.on(
+      "enable-view-only",
+      (roomID: string, ack?: (editorToken: string) => void) => {
+        const editorToken = enableViewOnly(roomID);
+        socketDebug(`${socket.id} turned on view-only for ${roomID}`);
+        ack?.(editorToken);
+        io.in(roomID).emit("room-roles-change", getRoles(roomID));
+      },
+    );
 
     socket.on(
       "server-broadcast",
@@ -128,6 +146,13 @@ try {
         );
 
         const isFollowRoom = roomID.startsWith("follow@");
+
+        if (!isFollowRoom) {
+          removeSocket(roomID, socket.id);
+          socket.broadcast
+            .to(roomID)
+            .emit("room-roles-change", getRoles(roomID));
+        }
 
         if (!isFollowRoom && otherClients.length > 0) {
           socket.broadcast.to(roomID).emit(
