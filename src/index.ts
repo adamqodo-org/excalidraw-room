@@ -3,7 +3,13 @@ import express from "express";
 import http from "http";
 import { Server as SocketIO } from "socket.io";
 
-import { assignRole, enableViewOnly, getRoles, removeSocket } from "./roles";
+import {
+  assignRole,
+  enableViewOnly,
+  getRole,
+  getRoles,
+  removeSocket,
+} from "./roles";
 
 type UserToFollow = {
   socketId: string;
@@ -90,6 +96,11 @@ try {
     socket.on(
       "server-broadcast",
       (roomID: string, encryptedData: ArrayBuffer, iv: Uint8Array) => {
+        if (getRole(roomID, socket.id) === "viewer") {
+          socketDebug(`${socket.id} is a viewer in ${roomID}, update dropped`);
+          io.to(`${socket.id}`).emit("broadcast-rejected", roomID);
+          return;
+        }
         socketDebug(`${socket.id} sends update to ${roomID}`);
         socket.broadcast.to(roomID).emit("client-broadcast", encryptedData, iv);
       },
