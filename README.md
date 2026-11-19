@@ -25,3 +25,16 @@ If you are not familiar with pm2: https://pm2.keymetrics.io/docs/usage/quick-sta
 ```
 pm2 start pm2.production.json
 ```
+
+# Participant roles
+
+A room is open by default: everyone who joins can edit. An editor can turn on view-only for the room:
+
+| Event | Direction | Payload |
+| --- | --- | --- |
+| `join-room` | client → server | `roomID`, optional `editorToken` |
+| `enable-view-only` | client → server | `roomID`, ack with the new `editorToken` |
+| `room-role` | server → client | `"editor"` or `"viewer"` for the joining socket |
+| `room-roles-change` | server → room | `{ [socketId]: "editor" \| "viewer" }` |
+
+After view-only is on, sockets that join without the editor token are viewers.
