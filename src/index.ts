@@ -12,6 +12,9 @@ type OnUserFollowedPayload = {
   action: "FOLLOW" | "UNFOLLOW";
 };
 
+// Room IDs the app generates: 10 random bytes as lowercase hex.
+const ROOM_ID_PATTERN = /^[0-9a-f]{20}$/;
+
 const serverDebug = debug("server");
 const ioDebug = debug("io");
 const socketDebug = debug("socket");
@@ -49,10 +52,21 @@ try {
     allowEIO3: true,
   });
 
+  // Reject malformed IDs and every socket's private room (its socket ID).
+  const isJoinableRoom = (roomID: unknown): roomID is string =>
+    typeof roomID === "string" &&
+    ROOM_ID_PATTERN.test(roomID) &&
+    !io.sockets.sockets.has(roomID);
+
   io.on("connection", (socket) => {
     ioDebug("connection established!");
     io.to(`${socket.id}`).emit("init-room");
-    socket.on("join-room", async (roomID) => {
+    socket.on("join-room", async (roomID: unknown) => {
+      if (!isJoinableRoom(roomID)) {
+        socketDebug(`${socket.id} rejected: invalid room ID`);
+        io.to(`${socket.id}`).emit("invalid-room");
+        return;
+      }
       socketDebug(`${socket.id} has joined ${roomID}`);
       await socket.join(roomID);
       const sockets = await io.in(roomID).fetchSockets();
