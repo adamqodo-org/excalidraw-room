@@ -12,6 +12,9 @@ type OnUserFollowedPayload = {
   action: "FOLLOW" | "UNFOLLOW";
 };
 
+// How long clients get to receive "server-shutdown" before we exit.
+const SHUTDOWN_GRACE_MS = 1000;
+
 const serverDebug = debug("server");
 const ioDebug = debug("io");
 const socketDebug = debug("socket");
@@ -148,6 +151,22 @@ try {
       socket.disconnect();
     });
   });
+
+  let isShuttingDown = false;
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
+    serverDebug(`${signal} received, notifying clients and shutting down`);
+    io.emit("server-shutdown");
+    setTimeout(() => {
+      io.close();
+      server.close(() => process.exit(0));
+    }, SHUTDOWN_GRACE_MS);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 } catch (error) {
   console.error(error);
 }
