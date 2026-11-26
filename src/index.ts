@@ -22,6 +22,21 @@ require("dotenv").config(
     : { path: ".env.development" },
 );
 
+const DEFAULT_MAX_ROOM_USERS = 50;
+
+// Rooms accept at most this many sockets; set MAX_ROOM_USERS=0 to disable.
+const parseMaxRoomUsers = (value: string | undefined) => {
+  if (value === undefined || value.trim() === "") {
+    return DEFAULT_MAX_ROOM_USERS;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0
+    ? parsed
+    : DEFAULT_MAX_ROOM_USERS;
+};
+
+const maxRoomUsers = parseMaxRoomUsers(process.env.MAX_ROOM_USERS);
+
 const app = express();
 const port =
   process.env.PORT || (process.env.NODE_ENV !== "development" ? 80 : 3002); // default port to listen
@@ -36,6 +51,7 @@ const server = http.createServer(app);
 
 server.listen(port, () => {
   serverDebug(`listening on port: ${port}`);
+  serverDebug(`max users per room: ${maxRoomUsers || "unlimited"}`);
 });
 
 try {
@@ -53,6 +69,15 @@ try {
     ioDebug("connection established!");
     io.to(`${socket.id}`).emit("init-room");
     socket.on("join-room", async (roomID) => {
+      if (maxRoomUsers > 0 && !socket.rooms.has(roomID)) {
+        const occupants = await io.in(roomID).fetchSockets();
+        if (occupants.length >= maxRoomUsers) {
+          socketDebug(`${socket.id} rejected from full room ${roomID}`);
+          io.to(`${socket.id}`).emit("room-full", maxRoomUsers);
+          return;
+        }
+      }
+
       socketDebug(`${socket.id} has joined ${roomID}`);
       await socket.join(roomID);
       const sockets = await io.in(roomID).fetchSockets();

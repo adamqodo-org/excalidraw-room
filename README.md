@@ -25,3 +25,9 @@ If you are not familiar with pm2: https://pm2.keymetrics.io/docs/usage/quick-sta
 ```
 pm2 start pm2.production.json
 ```
+
+# Configuration
+
+- `PORT`: port to listen on (defaults to 3002 in development, 80 otherwise)
+- `CORS_ORIGIN`: allowed origin for socket connections (defaults to `*`)
+- `MAX_ROOM_USERS`: maximum number of people in one room (defaults to 50, `0` disables the limit). Clients that try to join a full room receive a `room-full` event with the limit and are not added to the room.
